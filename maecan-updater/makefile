@@ -1,5 +1,5 @@
 # main compiler
-CC := gcc
+CC := mipsel-openwrt-linux-gcc
 
 TARGET1 := maecanUpdater
 
@@ -7,7 +7,7 @@ all: $(TARGET1)
 
 $(TARGET1): 
 	@echo "Compiling C program"
-	$(CC) $(CFLAGS) $(TARGET1).c -o $(TARGET1) $(LDFLAGS) -l$(LIB)
+	$(CC) $(TARGET1).c -o bin/$(TARGET1)
 
 clean:
-	@rm -rf $(TARGET1) $(TARGET2)
+	@rm -rf bin/$(TARGET1)
