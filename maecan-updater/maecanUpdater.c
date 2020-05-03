@@ -6,9 +6,13 @@
 * this stuff is worth it, you can buy me a beer in return.
 * 
 * ----------------------------------------------------------------------------
-* MäCAN-Bootloader
-* https://github.com/Ixam97/MaeCAN-Bootloader/
+* MäCAN-Updater:
+* https://github.com/Ixam97/SRSEII/maecan-updater/
 * ----------------------------------------------------------------------------
+*
+* This updater was made for the MäCAN-Bootloader only: https://github.com/Ixam97/MaeCAN-Bootloader/
+*
+* Last changed: 202-05-03
 */
 
 #include <stdio.h>
