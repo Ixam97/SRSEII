@@ -106,8 +106,13 @@ void sendPage(uint8_t page) {
 
 void main(int argc, char *argv[]) {
 
-    remote_uid = (uint32_t)strtol(argv[1], NULL, 16);
-    can_uid = remote_uid;
+    if (argc < 3) {
+        printf("Usage: maecanUpdater [Device-UID] [HEX-File Path]\n");
+        exit(EXIT_FAILURE);
+    }
+
+    can_uid = (uint32_t)strtol(argv[1], NULL, 16);;
+
     strncpy(file_path, argv[2], 32);
 
     memset(&ifr, 0x0, sizeof(ifr));
@@ -284,22 +289,24 @@ void main(int argc, char *argv[]) {
                                 exit(EXIT_FAILURE);
 
                             } else {
-                                
+
                                 if (retry == 0) {
-                                    usleep(1000000);
+                                    //usleep(1000000);
                                     printf("Beginning update...\n");
-                                    page_index = 1;
+                                    page_index = 0;
+                                    out_data[6] = 1;
+                                    sendCanFrame(0x00810300, 7, out_data);
+                                    sendPage(page_index);
+                                    page_index++;
 
                                 } else {
 
                                     out_data[6] = 1;
                                     sendCanFrame(0x00810300, 7, out_data);
-                                    printf("Blub\n");
                                     sendPage(page_index);
                                     page_index++;
                                 }
                             }
-
                         }
                     }
                 }
