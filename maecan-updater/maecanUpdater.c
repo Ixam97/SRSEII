@@ -12,7 +12,7 @@
 *
 * This updater was made for the MäCAN-Bootloader only: https://github.com/Ixam97/MaeCAN-Bootloader/
 *
-* Last changed: 202-05-03
+* Last changed: 2020-08-02
 */
 
 #include <stdio.h>
@@ -33,14 +33,14 @@
 
 #include <linux/can.h>
 
-#define PAGE_SIZE 128
+#define PAGE_SIZE 256
 
 /* Socket stuff */
 struct ifreq ifr;
 struct sockaddr_can addr;
 int socketcan;
 
-uint32_t can_uid = 0x4344281e;
+uint32_t can_uid;
 
 char file_path[32];
 uint32_t remote_uid;
@@ -53,8 +53,8 @@ uint16_t page_count;
 uint8_t page_index;
 
 uint8_t remote_type;
-uint8_t remote_pagesize;
-uint8_t remote_pagecount;
+uint16_t remote_pagesize;
+uint16_t remote_pagecount;
 
 uint8_t updating;
 uint8_t listening;
@@ -86,11 +86,11 @@ void sendCanFrame(uint32_t id, uint8_t dlc, uint8_t * data) {
 }
 
 void sendPage(uint8_t page) {
-    memcpy(page_buffer, &complete_buffer[PAGE_SIZE * page], PAGE_SIZE);
+    memcpy(page_buffer, &complete_buffer[remote_pagesize * page], remote_pagesize);
     uint8_t begin_frame_data[] = {(can_uid >> 24) & 0xff,(can_uid >> 16) & 0xff,(can_uid >> 8) & 0xff,(can_uid) & 0xff, 0x04, page, 0, 0};
     uint8_t finished_frame_data[] = {(can_uid >> 24) & 0xff,(can_uid >> 16) & 0xff,(can_uid >> 8) & 0xff,(can_uid) & 0xff, 0x05, page, 0, 0};
     uint8_t data_frame[8];
-    uint8_t needed_frames = ((PAGE_SIZE - 1) / 8) + 1;
+    uint8_t needed_frames = ((remote_pagesize - 1) / 8) + 1;
 
     printf("Sending page");
 
@@ -239,12 +239,12 @@ void main(int argc, char *argv[]) {
                                 }
                                 case 0x02 : {
                                     // Pagesize:
-                                    remote_pagesize = data[5];
+                                    remote_pagesize = (data[5] << 8) + data[6];
                                     break;
                                 }
                                 case 0x03 : {
                                     // Pagecount:
-                                    remote_pagecount = data[5];
+                                    remote_pagecount = (data[5] << 8) + data[6];
                                     break;
                                 }
                                 case 0x05 : {
@@ -283,11 +283,11 @@ void main(int argc, char *argv[]) {
                             out_data[5] = remote_type;
                             page_count = (complete_buffer_index / remote_pagesize) + 1;
                             if (retry == 0) {
-                                printf("Device found! \nByte Count: %d, Page count: %d\n", complete_buffer_index, page_count);
+                                printf("Device found! \nByte count: %d, Page count: %d\n", complete_buffer_index, page_count);
                             }
                             if (page_count > remote_pagecount) {
                                 // Update too large:
-                                printf("New Update too large, aborting.\n");
+                                printf("New update too large, aborting.\n");
                                 out_data[6] = 0;
                                 sendCanFrame(0x00800300, 7, out_data);
                                 exit(EXIT_FAILURE);
@@ -338,7 +338,7 @@ void main(int argc, char *argv[]) {
             //break;
         } else if (updating == 1 && page_index == 1 && received_frame == 0) {
             if (retry >= 1) {
-                printf("transmission error! \n");
+                printf("Transmission error! \n");
                 trys++;
             }
             page_index = 0;
