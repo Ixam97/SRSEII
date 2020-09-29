@@ -2,9 +2,9 @@
 
 MäCAN-Sever by Maximilian Goldschmidt
 
-## [2020-08-02.1]
+## [2020-09-29.1]
 ### Geändert
-- maecanUpdater: Unterstützung für aktuellen Bootloader auf ATmega2560
+-Auf den Selben Stand gebracht wie in Gerds Repo.
 
 ## [2018-08-12.1]
 ### Geändert
