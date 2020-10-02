@@ -119,6 +119,8 @@ var devices = require(devices_path);
 var locolist = require(locolist_path);
 var accessories = require(accessories_path)
 
+var devices_changed = false;
+
 var naz = local_config.new_registration_counter;
 var master = local_config.master;
 var ip = local_config.ip;
@@ -138,6 +140,7 @@ var gbox_uid;
 // VARIABLEN FÜR DEVICE INFOS:
 var config_buffer = [];
 var temp_mfx_loco = {};
+var data_fetcher;
 
 // Loknamen data query
 var loknamen_request = false;
@@ -158,8 +161,13 @@ var udpServer = dgram.createSocket('udp4');
 var udpClient = dgram.createSocket('udp4');
 
 var exec = require('child_process').exec;
+var spawn = require('child_process').spawn;
 
 var fs = require('fs');
+
+//var update = spawn("maecanUpdater", ["4d43060b","/root/MaeCAN_MP5x16.hex"]);
+
+//update.on("close", code => {console.log(`${code}`)})
 
 
 //----------------------------------------------------------------------------------//
@@ -1046,6 +1054,39 @@ function addArticle(msg_string){
     });
 }
 
+function dataFetcher(){
+  // Configdaten aus CAN-Geräten auslesen
+  console.log('fetch');
+
+  for (var i = 0; i < devices.length; i++) {
+    if (!bussy_fetching) {
+      if (!devices[i].name){
+        if (devices[i].request_count < 10 || !devices[i].request_count) {
+        }  
+      } else if (devices[i].status_chanels && (!devices[i].status_chanels_info || devices[i].status_chanels_info.length < devices[i].status_chanels)) {
+        if (!devices[i].status_chanels_info) {
+          devices[i].status_chanels_info = [];        
+        }
+        console.log('need to get ' + (devices[i].status_chanels - devices[i].status_chanels_info.length) + ' status chanels of ' + devices[i].name);
+        getDeviceInfo(devices[i].uid, devices[i].status_chanels_info.length + 1);
+        break;
+      } else if(devices[i].config_chanels && (!devices[i].config_chanels_info || devices[i].config_chanels_info.length < devices[i].config_chanels)) {
+        if (!devices[i].config_chanels_info) {
+          devices[i].config_chanels_info = [];
+        }
+        console.log('need to get ' + (devices[i].config_chanels - devices[i].config_chanels_info.length) + ' config chanels of ' + devices[i].name);
+        getDeviceInfo(devices[i].uid, devices[i].status_chanels + (devices[i].config_chanels_info.length + 1));
+        break;
+      }
+      if (!devices[i].name && !devices[i].device_info_request_attepted) {
+        getDeviceInfo(devices[i].uid, 0);
+        devices[i].device_info_request_attepted = true;
+        break;
+      }
+    }
+  }
+}
+
 //----------------------------------------------------------------------------------//
 //----------------------------------------------------------------------------------//
 
@@ -1194,8 +1235,9 @@ wsServer.on('request', function(request){
         }
       }
   
-      fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
-        console.log("updating devices entry.")  });
+      //fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
+      //  console.log("updating devices entry.")  });
+      devices_changed = true;
       
     
     } else if (cmd == 'progCV') {
@@ -1208,12 +1250,14 @@ wsServer.on('request', function(request){
       for (let i = 0; i < devices.length; i++) {
         if (devices[i].uid == msg[1]) {
           devices.splice(i, 1);
+          devices_changed = true;
           break;
         }
       }
       
-      fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
-        console.log("Deleting device " + msg[1]);   });
+      //fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
+      //  console.log("Deleting device " + msg[1]);   });
+      
 
       ping();
     
@@ -1354,23 +1398,37 @@ udpServer.on('message', (udp_msg, rinfo) => {
       let chanel = config_buffer[0][4];
       console.log('Done getting chanel ' + chanel + ' from device ' + device.name);
       
+
       if (chanel > 0 && chanel <= device.status_chanels) {
         let status_chanel = buildStatusChanelInfo(config_buffer);
         device.status_chanels_info[chanel - 1] = status_chanel;
-        fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
-            console.log("updating devices entry."); });
+        //fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
+        //    console.log("updating devices entry."); });
+        //devices_changed = true;
       
       } else if (chanel == 0) {
         device = buildDeviceInfo(config_buffer, device);
-        fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
-            console.log("updating devices entry."); });
+        if (device.config_chanels + device.status_chanels > 0) {
+          data_fetcher = setInterval(dataFetcher, 10);
+        }
+        //fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
+        //    console.log("updating devices entry."); });
+        //devices_changed = true;
       
       } else if (chanel > 0 && chanel <= device.config_chanels && chanel >= device.status_chanels){
         let config_chanel = buildConfigChanelInfo(config_buffer);
         device.config_chanels_info[chanel - 1] = config_chanel;
-        fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
-            console.log("updating devices entry.")  });
+        //fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
+        //    console.log("updating devices entry.")  });
+        //devices_changed = true;
       }
+
+      if (chanel == device.status_chanels + device.config_chanels) {
+        fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
+          console.log('Done geting device Info. Writing to file.'); });
+        clearInterval(data_fetcher);
+      }
+
       bussy_fetching = false;
     }
   
@@ -1404,10 +1462,13 @@ udpServer.on('message', (udp_msg, rinfo) => {
       devices[index].version = str_ver;
       devices[index].type = str_typ;
       devices[index].pingResponse = true;
+      //data_fetcher = setInterval(dataFetcher, 10);
+      //dataFetcher();
+      getDeviceInfo(uid, 0);
+      devices_changed = true;
 
-      fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
-        console.log("writing new devices entry.");
-      });
+      //fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
+      //  console.log("writing new devices entry.") });
     }
 
     for (let i = 0; i < devices.length; i++) {
@@ -1474,6 +1535,11 @@ setInterval(() => {
     devices[i].pingResponse = false;
   }
   ping();
+  if (devices_changed && !bussy_fetching) {
+    devices_changed = false;
+    fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
+      console.log("Updating devices.")  });
+  }
 }, 10000);
   // Alle 10 Sekunden einen Ping senden
 
@@ -1489,34 +1555,3 @@ if (master) { setInterval(function(){
     sendDatagram([0,BOOTL_CAN,3,0,0,0,0,0,0,0,0,0,0]);
   }
 }, 1000);   }
-
-var data_fetcher = setInterval(function(){
-  // Configdaten aus CAN-Geräten auslesen
-
-  for (var i = 0; i < devices.length; i++) {
-    if (!bussy_fetching) {
-      if (!devices[i].name){
-        if (devices[i].request_count < 10 || !devices[i].request_count) {
-        }  
-      } else if (devices[i].status_chanels && (!devices[i].status_chanels_info || devices[i].status_chanels_info.length < devices[i].status_chanels)) {
-        if (!devices[i].status_chanels_info) {
-          devices[i].status_chanels_info = [];        
-        }
-        console.log('need to get ' + (devices[i].status_chanels - devices[i].status_chanels_info.length) + ' status chanels of ' + devices[i].name);
-        getDeviceInfo(devices[i].uid, devices[i].status_chanels_info.length + 1);
-        break;
-      } else if(devices[i].config_chanels && (!devices[i].config_chanels_info || devices[i].config_chanels_info.length < devices[i].config_chanels)) {
-        if (!devices[i].config_chanels_info) {
-          devices[i].config_chanels_info = [];
-        }
-        console.log('need to get ' + (devices[i].config_chanels - devices[i].config_chanels_info.length) + ' config chanels of ' + devices[i].name);
-        getDeviceInfo(devices[i].uid, devices[i].status_chanels + (devices[i].config_chanels_info.length + 1));
-        break;
-      }
-      if (!devices[i].name && !devices[i].device_info_request_attepted) {
-        getDeviceInfo(devices[i].uid, 0);
-        devices[i].device_info_request_attepted = true;
-      }
-    }
-  }
-}, 250);
