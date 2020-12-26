@@ -12,9 +12,9 @@
 *
 * This updater was made for the MäCAN-Bootloader only: https://github.com/Ixam97/MaeCAN-Bootloader/
 *
-* Last changed: 2020-08-02
+* Last changed: [2020-12-26.1]
 */
-
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -61,8 +61,9 @@ uint8_t listening;
 uint8_t trys;
 uint8_t retry;
 
-uint8_t complete_buffer[0xffff];
-uint16_t complete_buffer_index;
+uint8_t complete_buffer[0xfffff];
+uint32_t complete_buffer_index;
+uint32_t adress_offset = 0;
 
 
 void sendCanFrame(uint32_t id, uint8_t dlc, uint8_t * data) {
@@ -151,7 +152,7 @@ void main(int argc, char *argv[]) {
     uint8_t byte_count, line_type, data_byte;
     uint16_t data_adress;
 
-    memset(complete_buffer, 0xff, 0xffff);
+    memset(complete_buffer, 0xff, 0xfffff);
     memset(page_buffer, 0xff, PAGE_SIZE);
     memset(s_byte_count, 0, 3);
     memset(s_data_address, 0, 5);
@@ -177,13 +178,24 @@ void main(int argc, char *argv[]) {
             s_line_type[1] = fgetc(update_file);
             line_type = strtol(s_line_type, NULL, 16);
 
-            for (uint8_t i = 0; i < byte_count; i++){
-                // Read data bytes 
-                s_data_byte[0] = fgetc(update_file);
+            if (line_type == 0x00) {
+                for (uint8_t i = 0; i < byte_count; i++){
+                    // Read data bytes 
+                    s_data_byte[0] = fgetc(update_file);
+                    s_data_byte[1] = fgetc(update_file);
+                    data_byte = strtol(s_data_byte, NULL, 16);
+                    //complete_buffer[complete_buffer_index] = data_byte;
+                    //complete_buffer_index++;
+                    complete_buffer[adress_offset + data_adress + i] = data_byte;
+                    complete_buffer_index = adress_offset + data_adress + i;
+                }
+            } else if (line_type == 0x02) {
+                s_data_byte[0] == 0;
                 s_data_byte[1] = fgetc(update_file);
                 data_byte = strtol(s_data_byte, NULL, 16);
-                complete_buffer[complete_buffer_index] = data_byte;
-                complete_buffer_index++;
+                adress_offset = (uint32_t)data_byte << 0x16;
+                data_byte = 0xff;
+
             }
         }
     }
