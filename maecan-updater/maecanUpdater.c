@@ -12,8 +12,10 @@
 *
 * This updater was made for the MäCAN-Bootloader only: https://github.com/Ixam97/MaeCAN-Bootloader/
 *
-* Last changed: [2020-12-26.1]
+* Last changed: [2020-01-16.1]
 */
+#define VERSION "[2020-01-16.1]"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +26,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <ctype.h>
+#include <libgen.h>
 
 #include <sys/socket.h>
 #include <sys/ioctl.h>
@@ -35,6 +38,8 @@
 
 #define PAGE_SIZE 256
 
+extern char *optarg;
+
 /* Socket stuff */
 struct ifreq ifr;
 struct sockaddr_can addr;
@@ -42,7 +47,6 @@ int socketcan;
 
 uint32_t can_uid;
 
-char file_path[32];
 uint32_t remote_uid;
 
 fd_set readfds;
@@ -64,6 +68,8 @@ uint8_t retry;
 uint8_t complete_buffer[0xfffff];
 uint32_t complete_buffer_index;
 uint32_t adress_offset = 0;
+
+uint8_t slow_mode = 0;
 
 
 void sendCanFrame(uint32_t id, uint8_t dlc, uint8_t * data) {
@@ -101,24 +107,62 @@ void sendPage(uint8_t page) {
         memcpy(data_frame, &page_buffer[i * 8], 8);
         sendCanFrame(0x00800300 + i + 1, 8, data_frame);
         printf(".");
+        if (slow_mode == 1) {
+            usleep(20000);
+        }
     }
 
     sendCanFrame(0x00800300, 6, finished_frame_data);
     printf("%d done.\n", page);
 
 }
+
+void printUsage(char *prg){
+    fprintf(stderr,"\nUsage: %s -f <update file> -t <target uid>\n", prg);
+    fprintf(stderr,"   Version: %s\n\n", VERSION);
+    fprintf(stderr,"         -f <update file> path to the update file in intel hex format\n");
+    fprintf(stderr,"         -t <target uid>  CAN UID of the device to be updated\n\n");
+    fprintf(stderr,"         -s               use slow mode in case of falure or to look at the can-monitor\n\n");
+    fprintf(stderr,"         -h               show this help\n\n");
+}
     
 
 void main(int argc, char *argv[]) {
 
-    if (argc < 3) {
-        printf("Usage: maecanUpdater [Device-UID] [HEX-File Path]\n");
+    int opt;
+    char uidstring[256];
+    char filepath[256];
+
+    while ((opt = getopt(argc, argv, "f:t:sh?")) != -1) {
+        switch (opt) {
+            case 's' : 
+            slow_mode = 1;
+            printf("Slow mode\n");
+            break;
+            case 'f' : 
+            strncpy(filepath, optarg, sizeof(filepath)-1);
+            break;
+            case 't' :
+            strncpy(uidstring, optarg, sizeof(uidstring)-1);
+            break;
+            case 'h':
+            case '?':
+            printUsage(basename(argv[0]));
+            exit(EXIT_SUCCESS);
+            break;
+            default:
+            printUsage(basename(argv[0]));
+            exit(EXIT_FAILURE);
+            break;
+        }
+    }
+
+    if (filepath[0] == 0 || uidstring[0] == 0) {
+        printUsage(basename(argv[0]));
         exit(EXIT_FAILURE);
     }
 
-    can_uid = (uint32_t)strtol(argv[1], NULL, 16);;
-
-    strncpy(file_path, argv[2], 32);
+    can_uid = (uint32_t)strtol(uidstring, NULL, 16);
 
     memset(&ifr, 0x0, sizeof(ifr));
     memset(&addr, 0x0, sizeof(addr));
@@ -146,7 +190,7 @@ void main(int argc, char *argv[]) {
 
     FILE *update_file;
 
-    update_file = fopen(file_path, "r");
+    update_file = fopen(filepath, "r");
 
     char ch, s_byte_count[3], s_data_address[5], s_line_type[3], s_data_byte[3];
     uint8_t byte_count, line_type, data_byte;
