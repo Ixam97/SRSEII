@@ -234,7 +234,7 @@ void main(int argc, char *argv[]) {
                     complete_buffer_index = adress_offset + data_adress + i;
                 }
             } else if (line_type == 0x02) {
-                s_data_byte[0] == 0;
+                s_data_byte[0] = 0;
                 s_data_byte[1] = fgetc(update_file);
                 data_byte = strtol(s_data_byte, NULL, 16);
                 adress_offset = (uint32_t)data_byte << 0x16;

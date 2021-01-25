@@ -2,6 +2,9 @@
 
 MäCAN-Updater by Maximilian Goldschmidt
 
+## [2021-01-25.1]
+- Fehlerbehebung von Gerd übernommen
+
 ## [2021-01-16.1]
 - Slow-Mode für langsamere Datenübertragung
 - Argumente überarbeitet und aussagekräftigere Hilfe hinzugefügt

@@ -1056,10 +1056,16 @@ function addArticle(msg_string){
 
 function dataFetcher(){
   // Configdaten aus CAN-Geräten auslesen
-  console.log('fetch');
-
-  for (var i = 0; i < devices.length; i++) {
-    if (!bussy_fetching) {
+  //console.log('fetch');
+/*
+  if (!bussy_fetching) {
+    devices.forEach((element, index) => {
+      if()
+    });
+  }
+*/
+  if (!bussy_fetching) {
+    for (var i = 0; i < devices.length; i++) {
       if (!devices[i].name){
         if (devices[i].request_count < 10 || !devices[i].request_count) {
         }  
@@ -1249,6 +1255,7 @@ wsServer.on('request', function(request){
     } else if (cmd == 'delDevice') {
       for (let i = 0; i < devices.length; i++) {
         if (devices[i].uid == msg[1]) {
+          console.log(`Deleting Device ${devices[i].name}`)
           devices.splice(i, 1);
           devices_changed = true;
           break;
@@ -1330,6 +1337,17 @@ udpServer.on('message', (udp_msg, rinfo) => {
     
     } else if (sub_cmd == SYS_STATUS) {
       ws_msg = `updateReading:${uid}:${data[5]}:${(data[6] << 8) + data[7]}`;
+      let device_index = getDeviceIndexFromUID(uid, devices)
+      let device = devices[device_index]
+      if (device.config_chanels > 0) {
+        device.config_chanels_info.forEach((element, index) => {
+          if (element.chanel == data[5]) {
+            console.log(`Updating default value of 0x${uid} chanel ${data[5]} value ${(data[6] << 8) + data[7]}`)
+            devices[device_index].config_chanels_info[index].def_value = (data[6] << 8) + data[7]
+            devices[device_index].config_chanels_info[index].def_option = (data[6] << 8) + data[7]
+          }
+        });
+      }
     }
   
   } else if (cmd == (LOCO_DISCOVERY + 1) && dlc == 5) {
@@ -1408,9 +1426,9 @@ udpServer.on('message', (udp_msg, rinfo) => {
       
       } else if (chanel == 0) {
         device = buildDeviceInfo(config_buffer, device);
-        if (device.config_chanels + device.status_chanels > 0) {
-          data_fetcher = setInterval(dataFetcher, 10);
-        }
+        //if (device.config_chanels + device.status_chanels > 0) {
+        //  data_fetcher = setInterval(dataFetcher, 100);
+        //}
         //fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
         //    console.log("updating devices entry."); });
         //devices_changed = true;
@@ -1418,6 +1436,7 @@ udpServer.on('message', (udp_msg, rinfo) => {
       } else if (chanel > 0 && chanel <= device.config_chanels && chanel >= device.status_chanels){
         let config_chanel = buildConfigChanelInfo(config_buffer);
         device.config_chanels_info[chanel - 1] = config_chanel;
+        getStatus(uid, chanel)
         //fs.writeFile(devices_path, JSON.stringify(devices, null, 2), function(){
         //    console.log("updating devices entry.")  });
         //devices_changed = true;
@@ -1529,6 +1548,9 @@ udpServer.on('message', (udp_msg, rinfo) => {
 
 //----------------------------------------------------------------------------------//
 // Periodischer Code:
+setInterval(() => {
+  dataFetcher()
+}, 100)
 
 setInterval(() => {
   for (let i = 0; i < devices.length; i++) {
